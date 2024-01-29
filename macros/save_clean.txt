@@ -1,0 +1,94 @@
+Option Explicit
+
+'フォルダーをダイアログから取得して内部にあるエクセルファイルを綺麗に保存する
+'拡大率100％、全シートセルＡ１選択、左上スクロール、全ブック先頭シート選択
+'指定フォルダのサブフォルダも検索して上記処理
+Sub clean_save()
+    Dim Path,FileName,FilePath
+    Dim myPath As String
+
+    '任意のフォルダを設定するダイアログを表示する
+    With Application.FileDialog(4)
+        'カレントディレクトリを指定（初期表示したいパスがあれば指定）
+        .InitialFileName = ""
+
+        '指定しない場合は終了
+        If .Show = False Then Exit Sub
+
+        '設定したフォルダーを表示
+        Path = .SelectedItems(1)
+    End With
+
+    'エクセル操作プロシージャーをコール
+    Call excelOperation(myPath)
+
+End Sub
+
+'指定パスからエクセルを操作する
+'指定パスにフォルダがあればその中を検索してエクセルファイルがあれば操作する
+Sub excelOperation(Path As String)
+    Dim myBook As String
+    Dim objSheet As Worksheet
+    Dim f As Object
+
+    'フォルダの再度に「￥」を追加
+    Path = Path + "\"
+
+    'フォルダ直下の指定拡張子ファイルを取得
+    myBook = Dir(Path & "*.xlsx")
+
+    '指定パス内のエクセルファイルループ
+    Do Until myBook = ""
+
+        'エクセルファイルを開く
+        Workbooks.Open Path & myBook
+        Workbooks(myBook).Activate
+
+        '開いたエクセルブックの全シートループ
+        For Each objSheet In ActiveWorkbook.Worksheets
+
+            '現ループシートをアクティブ
+            objSheet.Activate
+
+            '拡大率を100％
+            ActiveWindow.Zoom = 100
+
+            'シートの先頭までスクロール
+            ActiveWindow.ScrollColumn = 1
+            ActiveWindow.ScrollRow = 1
+
+            'シートの一番左上を選択
+            ActiveSheet.Range("A1").Select
+
+        Next
+
+        'ブックの一番目のシートを選択
+        ActiveWorkbook.Worksheets(1).Activate
+        ActiveWorkbook.Worksheets(1).Select
+        Sheets(1).Select
+
+        'ブックを保存
+        ActiveWorkbook.Save
+        'ブックを閉じる
+        Workbooks(myBook).Close
+        'SaveChanges:=True
+
+        myBook = Dir
+
+    Loop
+
+    'サブフォルダを探索して処理を繰り返す
+    With CreateObject("Scripting.FileSystemObject")
+
+        '発見したサブフォルダーをループ
+        For Each f In .GetFolder(Path).SubFolders
+
+            '関数を再帰呼び出しサブフォルダーのエクセルファイルを処理
+            Call excelOperation(f.Path)
+
+        Next f
+
+    End With 
+
+End Sub
+        

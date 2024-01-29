@@ -1,0 +1,143 @@
+Option Explicit
+
+Sub sheetname_refrect()
+
+	Dim Path , FileName , FilePath
+	Dim myPath As String
+	
+	'任意フォルダーを設定するダイアログを表示する
+	With Application.FileDialog(4)
+		'カレントディレクトリを指定
+		.initialFileName = ""
+		'設定しなかったら終了する
+		If .Show = False Then Exit Sub
+		'設定したフォルダーを表示する
+		Path = .SelectedItems(1)
+	End With
+	
+	
+	'フォルダー名の最後に「￥」を追加
+	myPath = Path + "\"
+	
+	'エクセル処理呼び出し
+	Call excelOperation(myPath)
+	
+End SUb
+
+
+
+Sub excelOperation(Path As String)
+	Dim myBook As String
+	Dim objSheet As Worksheet
+	Dim name_array As Variant
+	Dim detail_array As Valiant
+	Dim i As Integer
+	Dim SheetCnt As Integer
+	Dim copyTitleRange As String
+	Dim copyDetailRange As String
+	Dim copyTitleCell As String
+	Dim copyDetailCell As String
+	Dim SkipSheetCnt As Integer
+	
+	
+	'フォルダーの最後に「￥」を追加
+	Path = Path + "\"
+	
+	myBook = Dir(Path & "*.xlsx")
+	
+	'指定ディレクトリ内エクセルファイルループ
+	Do Until myBook = ""
+		'ループ変数を初期化
+		i = 1
+		SheetCnt = 1
+		
+		'エクセルファイルを開く
+		Workbooks.Open Path & myBook
+		Workbooks(myBook).Activate
+		
+		ActiveWorkbook.Worksheets(1).Select
+		
+		
+		'セルを選択する
+		copyTitleRange = selectCellRange("タイトルのセルを選択してください")
+		copyDetailRange = selectCellRange("詳細のセルを選択してください、ない場合は閉じてください")
+		
+		'範囲指定のテキスト情報を取得
+		Set name_array = ActiveWorkbook.Worksheets(1).Range(copyTitleRange)
+		Set detail_array = ActiveWorkbook.Worksheets(1).Range(copyDetailRange)
+		
+		'ペーストする場所の選択
+		copyTitleCell = selectCellRange("タイトルを貼り付けるセルを選択してください")
+		copyDetailCell = selectCellRange("詳細を貼り付けるセルを選択してください、ない場合は閉じてください")
+		
+		'シート名でないシート数を入力（上記処理を回避したいシート数）
+		SkipSheetCnt = SheetCntInt()
+		
+		
+		'開いたエクセルのシート全ループ
+		For Each objSheet In ActiveWorkbook.Worksheets
+		
+			If i > SkipSheetCnt Then
+				'ループシートをアクティブにする
+				objSheet.Activate
+				
+				ActiveSheet.Name  = "接頭辞を入力" + CStr(SheetCnt) + "." + CStr(name_array( i- SkipSheetCnt ))
+				
+				If copyDetailRange <> "" Then
+ 					Range(copyDetailCell) = detail_array( i - SkipSheetCnt )
+				End If
+				
+				'該当シートのループ変数をインクリメント
+				SheetCnt = SheetCnt + 1
+				
+			Else 
+				Range(copyTitleCell) = ActiveSheet.Name
+			End If
+			
+			'ループ変数をインクリメント
+			i = i + 1
+			
+		Next
+		
+		ActiveWorkbook.Save
+		Workbooks(mybook).Close
+		myBook = Dir
+		Loop
+End Sub
+
+
+'一括でペーストしたいセルを選択
+Function selectCellRange(msg As String) As String
+	On Error GoTo ErrHandl
+	
+	Dim rng As Range
+	Set rng = Application.InputBox( _
+	Prompt:=msg, _
+	Type:=8)
+	
+	MsgBox rng.Address(False , False)
+Exit Function
+
+ErrHandl:
+ Err.Clear
+End Function
+
+
+'スキップするシート数入力
+Function SheetCntInt() As Integer
+	On Error GoTo ErrHandl
+	
+	Dim num As String
+	num = Application.InputBox( _ 
+	Prompt:="スキップするシート数を選択してください", _
+	Type:=1)
+	
+	SheetCntInt = Val(num)
+Exit Function
+
+ErrHandl:
+ Err.Clear
+End Function
+	
+	
+				
