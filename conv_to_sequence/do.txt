@@ -3,3 +3,15 @@ pip install easyocr opencv-python pillow pyautogui
 
 exe変換するために下記を実行する
 pyinstaller --onefile 作成ファイル名.py
+
+
+✅ ⑤ オフラインでも動くようにしたい（任意）
+初回実行時に以下のようなファイルが作られます：
+
+makefile
+コピーする
+編集する
+C:\Users\<ユーザ名>\.easyocr\
+└── model/
+    ├── japanese_g2.pth
+    └── craft_mlt_25k.pth
