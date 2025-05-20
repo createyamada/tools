@@ -1,1 +1,5 @@
 pip install easyocr opencv-python pillow pyautogui
+
+
+exe変換するために下記を実行する
+pyinstaller --onefile 作成ファイル名.py
