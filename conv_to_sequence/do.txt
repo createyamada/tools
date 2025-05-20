@@ -8,10 +8,92 @@ pyinstaller --onefile 作成ファイル名.py
 ✅ ⑤ オフラインでも動くようにしたい（任意）
 初回実行時に以下のようなファイルが作られます：
 
-makefile
+下記のように保存
+your_project/
+├── flowchart_ocr.py
+└── models/
+    ├── craft_mlt_25k.pth
+    └── japanese_g2.pth
+
+
+以下のように easyocr.Reader にローカルモデルパスを指定します：
+import easyocr
+import os
+
+# カレントディレクトリから models フォルダを取得
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model_storage_dir = os.path.join(BASE_DIR, 'models')
+
+reader = easyocr.Reader(
+    lang_list=['ja'], 
+    model_storage_directory=model_storage_dir,
+    download_enabled=False  # ネット接続なしで動作
+)
+
+
+✅ ③ .spec ファイルを作成
+以下を flowchart_ocr.spec という名前で保存してください：
+
+python
 コピーする
 編集する
-C:\Users\<ユーザ名>\.easyocr\
-└── model/
-    ├── japanese_g2.pth
-    └── craft_mlt_25k.pth
+# -*- mode: python ; coding: utf-8 -*-
+import os
+from PyInstaller.utils.hooks import collect_submodules
+
+block_cipher = None
+
+# モデルパス
+models_path = os.path.abspath('models')
+
+a = Analysis(
+    ['flowchart_ocr.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        (os.path.join(models_path, 'craft_mlt_25k.pth'), 'models'),
+        (os.path.join(models_path, 'japanese_g2.pth'), 'models'),
+    ],
+    hiddenimports=collect_submodules('easyocr'),
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='flowchart_ocr',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='flowchart_ocr'
+)
+
+
+✅ ④ .exe をビルド
+以下のコマンドを実行：
+
+bash
+コピーする
+編集する
+pyinstaller flowchart_ocr.spec
