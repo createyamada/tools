@@ -1,1 +1,1 @@
-pip install pytesseract opencv-python pillow pyautogui
+pip install easyocr opencv-python pillow pyautogui
