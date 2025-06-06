@@ -1,99 +1,40 @@
-pip install easyocr opencv-python pillow pyautogui
+Sub ExtractScreensWithoutRegex()
+    Dim srcText As String
+    Dim words() As String
+    Dim i As Long
+    Dim result As String
+    Dim temp As String
+    Dim screenNames As Object
+    
+    ' 抽出対象の文字列
+    srcText = "テスト山城てでえう→本当画面（テス）→頑張り（詳細）画面（テス）→テスト画面（テス）・ガンジス画面(テス)→本当の画面(テス)これは文字列です"
+    
+    ' セパレータで一旦分割（全角・半角対応）
+    words = Split(Replace(Replace(Replace(srcText, "→", " "), "・", " "), "　", " "))
+    
+    ' 重複除去用の辞書
+    Set screenNames = CreateObject("Scripting.Dictionary")
+    
+    ' 各単語を走査
+    For i = LBound(words) To UBound(words)
+        temp = Trim(words(i))
+        
+        ' 「画面」が含まれる文字列だけを抽出
+        If InStr(temp, "画面") > 0 Then
+            ' 末尾の括弧などを削除（任意）
+            temp = Left(temp, InStr(temp, "画面") + 1)
+            If Not screenNames.exists(temp) Then
+                screenNames.Add temp, True
+                result = result & temp & ","
+            End If
+        End If
+    Next i
 
+    ' 末尾のカンマ削除
+    If Len(result) > 0 Then
+        result = Left(result, Len(result) - 1)
+    End If
 
-exe変換するために下記を実行する
-pyinstaller --onefile 作成ファイル名.py
-
-
-✅ ⑤ オフラインでも動くようにしたい（任意）
-初回実行時に以下のようなファイルが作られます：
-
-下記のように保存
-your_project/
-├── flowchart_ocr.py
-└── models/
-    ├── craft_mlt_25k.pth
-    └── japanese_g2.pth
-
-
-以下のように easyocr.Reader にローカルモデルパスを指定します：
-import easyocr
-import os
-
-# カレントディレクトリから models フォルダを取得
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model_storage_dir = os.path.join(BASE_DIR, 'models')
-
-reader = easyocr.Reader(
-    lang_list=['ja'], 
-    model_storage_directory=model_storage_dir,
-    download_enabled=False  # ネット接続なしで動作
-)
-
-
-✅ ③ .spec ファイルを作成
-以下を flowchart_ocr.spec という名前で保存してください：
-
-python
-コピーする
-編集する
-# -*- mode: python ; coding: utf-8 -*-
-import os
-from PyInstaller.utils.hooks import collect_submodules
-
-block_cipher = None
-
-# モデルパス
-models_path = os.path.abspath('models')
-
-a = Analysis(
-    ['flowchart_ocr.py'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        (os.path.join(models_path, 'craft_mlt_25k.pth'), 'models'),
-        (os.path.join(models_path, 'japanese_g2.pth'), 'models'),
-    ],
-    hiddenimports=collect_submodules('easyocr'),
-    hookspath=[],
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='flowchart_ocr',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='flowchart_ocr'
-)
-
-
-✅ ④ .exe をビルド
-以下のコマンドを実行：
-
-bash
-コピーする
-編集する
-pyinstaller flowchart_ocr.spec
+    ' 結果表示
+    MsgBox result
+End Sub
