@@ -1,1 +1,8 @@
-=SUMIFS($D$4:$D$32, $C$4:$C$32, $C33)
+for pid in /proc/[0-9]*; do
+  pidnum=$(basename "$pid")
+  if [ -d "$pid/fd" ]; then
+    count=$(ls -U "$pid/fd" 2>/dev/null | wc -l)
+    cmd=$(tr -d '\0' < "$pid/comm" 2>/dev/null)
+    echo "$count $pidnum $cmd"
+  fi
+done | sort -nr | head
