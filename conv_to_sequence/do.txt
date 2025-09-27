@@ -6,3 +6,7 @@ for pid in /proc/[0-9]*; do
     echo "$count $pidnum $cmd"
   fi
 done | sort -nr | head
+
+
+
+ls -l /proc/{process_id}/fd | head
