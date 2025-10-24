@@ -1,7 +1,7 @@
-
-#ネットワークドライブを開いているエクスプローラーを閉じる
+REM ネットワークドライブを開いているエクスプローラーを閉じる
 powershell -Command "Stop-Process -Name explorer -Force"
 
-#REM エクスプローラーを開く
+REM エクスプローラーを開く
 explorer "C:\MyProject"
+
 
