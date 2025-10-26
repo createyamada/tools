@@ -1,81 +1,85 @@
+import openpyxl
 import csv
-from openpyxl import load_workbook
 import os
 
-# 入力Excelファイル
 input_file = "testdataA.xlsx"
-output_dir = "csv_output"
+output_dir = "output_csv"
 
-# 出力フォルダがなければ作成
+# 出力フォルダを作成
 os.makedirs(output_dir, exist_ok=True)
 
-# Excelファイルを開く（全シート読み込み）
-wb = load_workbook(input_file, data_only=True)
+wb = openpyxl.load_workbook(input_file, data_only=True)
 
 for sheet_name in wb.sheetnames:
     ws = wb[sheet_name]
-    print(f"🧩 シート処理中: {sheet_name}")
+    base_header = ws["E6"].value
 
-    # E4セルから検索キーワードを取得
-    e4_value = ws["E4"].value
-    if not e4_value:
-        print(f"⚠️ {sheet_name}: E4セルが空のためスキップします。")
+    if base_header is None:
+        print(f"caution:{sheet_name}: E4セルに値がありません。スキップします。")
         continue
-    search_key = str(e4_value).strip()
-    print(f"🔍 検索キーワード: '{search_key}'")
 
-    # 全行を取得
+    # print(f"シート '{sheet_name}' を処理中…（基準キー: {base_header}）")
+
     rows = list(ws.iter_rows(values_only=True))
     records = []
+    headers = []
 
     i = 0
     while i < len(rows):
-        # 検索キーワードが含まれる行を探す
-        row = [str(c).strip() if c is not None else "" for c in rows[i]]
-        if any(search_key.lower() in cell.lower() for cell in row):
-            # --- 可変長ブロックを取得 ---
-            block_rows = []
+        row = rows[i]
+        # base_header を含む行を検出
+        if any(str(cell).strip() == base_header for cell in row if cell):
+            # ブロック（空白行まで）を取得
+            block = []
             j = i
-            while j < len(rows):
-                current_row = rows[j]
-                if all(c is None or str(c).strip() == "" for c in current_row):
-                    break
-                block_rows.append(current_row)
+            while j < len(rows) and any(cell is not None for cell in rows[j]):
+                block.append(rows[j])
                 j += 1
-            # --- ブロック処理 ---
-            header_names = [str(r[0]).strip() for r in block_rows]
-            num_cols = max(len(r) for r in block_rows)
 
-            for col in range(1, num_cols):
+            # 各行の最初の非Noneセルをキーに
+            keys = []
+            for r in block:
+                # print(r)s
+                first_val = next((str(c).strip() for c in r if c is not None), None)
+                if first_val:
+                    keys.append(first_val)
+
+            # 初回のみヘッダー保存
+            if not headers:
+                headers = keys
+
+            # データ部分を右方向に展開（1列目スキップ）
+            max_len = max(len(r) for r in block)
+            for col in range(1, max_len):
                 record = {}
-                empty_col = True
-                for k, header in enumerate(header_names):
-                    if header == "" or k >= len(block_rows):
-                        continue
-                    value = block_rows[k][col] if col < len(block_rows[k]) else None
-                    if value not in (None, ""):
-                        empty_col = False
-                    record[header] = value
-                if not empty_col:
-                    records.append(record)
-            i = j  # 次のブロックへ
+                valid = False
+                for k_idx, key in enumerate(keys):
+                    if k_idx < len(block) and col < len(block[k_idx]):
+                        val = block[k_idx][col]
+                        record[key] = val
+                        if val is not None:
+                            valid = True
+                # 空でないレコードだけ追加
+
+                print(record)
+                if valid:
+                    # print(record)
+                    if record[base_header] != base_header:
+                        records.append(record)
+
+            i = j  # 次ブロックへ進む
         else:
             i += 1
 
-    # --- 出力 ---
     if not records:
-        print(f"⚠️ {sheet_name}: データが見つかりません。")
+        print(f"caution:{sheet_name}: レコードが抽出されませんでした。")
         continue
 
-    # CSV出力用のカラム名
-    fieldnames = list({key for r in records for key in r.keys()})
-    output_path = os.path.join(output_dir, f"{sheet_name}.csv")
-
-    with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    # CSV出力
+    output_file = os.path.join(output_dir, f"{sheet_name}.csv")
+    with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         writer.writerows(records)
 
-    print(f"✅ {sheet_name}: {len(records)}件のレコードを '{output_path}' に出力しました。\n")
-
-print("🎉 全シートの処理が完了しました。")
+    print(f"success:{len(records)}件のレコードを '{output_file}' に出力しました。\n")
