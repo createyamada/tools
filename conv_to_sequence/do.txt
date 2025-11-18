@@ -1,85 +1,48 @@
-import openpyxl
-import csv
-import os
+import java.sql.*;
 
-input_file = "testdataA.xlsx"
-output_dir = "output_csv"
+public class OracleQueryExample {
 
-# 出力フォルダを作成
-os.makedirs(output_dir, exist_ok=True)
+    // PDBのJDBC URL
+    private static final String URL = "jdbc:oracle:thin:@//localhost:1521/ORCLPDB1";
 
-wb = openpyxl.load_workbook(input_file, data_only=True)
+    // スキーマのユーザー名 & パスワード
+    private static final String USER = "TARGET_SCHEMA";  // ←特定スキーマのユーザー名
+    private static final String PASSWORD = "password";
 
-for sheet_name in wb.sheetnames:
-    ws = wb[sheet_name]
-    base_header = ws["E6"].value
+    public static void main(String[] args) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
 
-    if base_header is None:
-        print(f"caution:{sheet_name}: E4セルに値がありません。スキップします。")
-        continue
+        try {
+            // 1. JDBCドライバ読み込み（最近は不要なことも多い）
+            Class.forName("oracle.jdbc.driver.OracleDriver");
 
-    # print(f"シート '{sheet_name}' を処理中…（基準キー: {base_header}）")
+            // 2. 接続
+            conn = DriverManager.getConnection(URL, USER, PASSWORD);
+            System.out.println("Connected to Oracle PDB!");
 
-    rows = list(ws.iter_rows(values_only=True))
-    records = []
-    headers = []
+            // 3. SQLクエリ（特定テーブル）
+            String sql = "SELECT * FROM TARGET_SCHEMA.MY_TABLE WHERE ROWNUM <= 10";
+            pstmt = conn.prepareStatement(sql);
 
-    i = 0
-    while i < len(rows):
-        row = rows[i]
-        # base_header を含む行を検出
-        if any(str(cell).strip() == base_header for cell in row if cell):
-            # ブロック（空白行まで）を取得
-            block = []
-            j = i
-            while j < len(rows) and any(cell is not None for cell in rows[j]):
-                block.append(rows[j])
-                j += 1
+            // 4. 実行
+            rs = pstmt.executeQuery();
 
-            # 各行の最初の非Noneセルをキーに
-            keys = []
-            for r in block:
-                # print(r)s
-                first_val = next((str(c).strip() for c in r if c is not None), None)
-                if first_val:
-                    keys.append(first_val)
+            // 5. 結果表示
+            while (rs.next()) {
+                // カラム名を指定する
+                System.out.println("ID: " + rs.getInt("ID"));
+                System.out.println("NAME: " + rs.getString("NAME"));
+            }
 
-            # 初回のみヘッダー保存
-            if not headers:
-                headers = keys
-
-            # データ部分を右方向に展開（1列目スキップ）
-            max_len = max(len(r) for r in block)
-            for col in range(1, max_len):
-                record = {}
-                valid = False
-                for k_idx, key in enumerate(keys):
-                    if k_idx < len(block) and col < len(block[k_idx]):
-                        val = block[k_idx][col]
-                        record[key] = val
-                        if val is not None:
-                            valid = True
-                # 空でないレコードだけ追加
-
-                print(record)
-                if valid:
-                    # print(record)
-                    if record[base_header] != base_header:
-                        records.append(record)
-
-            i = j  # 次ブロックへ進む
-        else:
-            i += 1
-
-    if not records:
-        print(f"caution:{sheet_name}: レコードが抽出されませんでした。")
-        continue
-
-    # CSV出力
-    output_file = os.path.join(output_dir, f"{sheet_name}.csv")
-    with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=headers)
-        writer.writeheader()
-        writer.writerows(records)
-
-    print(f"success:{len(records)}件のレコードを '{output_file}' に出力しました。\n")
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            // 6. 終了処理
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+            try { if (pstmt != null) pstmt.close(); } catch (Exception e) {}
+            try { if (conn != null) conn.close(); } catch (Exception e) {}
+        }
+    }
+}
