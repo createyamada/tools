@@ -1,54 +1,28 @@
-import os
-import re
-from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
+@echo off
+REM ==== コピー元のネットワークドライブ ====
+set SOURCE=\\SERVER\share\folder
 
-# 対象ディレクトリ
-target_dir = r"C:\path\to\your\folder"
+REM ==== バッチを実行したディレクトリ ====
+set TARGET=%~dp0
 
-# 出力ファイル名（メモ帳で開けるテキスト）
-output_file = os.path.join(target_dir, "抽出結果.txt")
+REM ==== ネットワークにアクセスできるか確認 ====
+ping -n 1 SERVER >nul 2>&1
+if errorlevel 1 (
+    echo ネットワークに接続できません。サーバー: SERVER
+    pause
+    exit /b
+)
 
-# 出力内容を蓄積する変数
-output_lines = []
+REM ==== .xlsxファイルをコピー ====
+echo コピー中... %SOURCE% → %TARGET%
+copy "%SOURCE%\*.xlsx" "%TARGET%" /Y
 
-# ディレクトリ配下の全Excelファイルを処理
-for root, _, files in os.walk(target_dir):
-    for file in files:
-        if file.endswith(".xlsx"):
-            file_path = os.path.join(root, file)
-            wb = load_workbook(file_path, data_only=True)
-            ws = wb.active  # アクティブシートを使用
+REM ==== 結果確認 ====
+if errorlevel 1 (
+    echo コピーに失敗しました。
+) else (
+    echo コピー完了しました。
+)
 
-            # K列（11列目）の最終行を取得
-            col_letter = get_column_letter(11)
-            last_row = max(
-                (cell.row for cell in ws[col_letter] if cell.value not in (None, "")),
-                default=0
-            )
+pause
 
-            # 各ファイルごとの結果リスト
-            file_results = []
-
-            # K列を走査
-            for row in range(1, last_row + 1):
-                cell_value = ws.cell(row=row, column=11).value
-                if isinstance(cell_value, str):
-                    # 「○○画面」 の形をすべて抽出
-                    matches = re.findall(r'「([^「」]*?画面)」', cell_value)
-                    file_results.extend(matches)
-
-            # 結果をテキスト用に追加
-            output_lines.append(f"📘 ファイル名: {file}")
-            if file_results:
-                for r in file_results:
-                    output_lines.append(f"  - {r}")
-            else:
-                output_lines.append("  （該当なし）")
-            output_lines.append("")  # 空行で区切り
-
-# === ファイルに書き出し ===
-with open(output_file, "w", encoding="utf-8") as f:
-    f.write("\n".join(output_lines))
-
-print(f"✅ 抽出結果をメモ帳用ファイルに出力しました: {output_file}")
