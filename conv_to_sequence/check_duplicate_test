@@ -1,28 +1,19 @@
-@echo off
-REM ==== コピー元のネットワークドライブ ====
-set SOURCE=\\SERVER\share\folder
+SET LONG 2000000000;
+SET LONGCHUNKSIZE 2000000;
+SET PAGESIZE 0;
+SET FEEDBACK OFF;
 
-REM ==== バッチを実行したディレクトリ ====
-set TARGET=%~dp0
+BEGIN
+  DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM,'EMIT_SCHEMA',false);
+  DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM,'DATA',true);
+  DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM,'DATA_OPTIONS',DBMS_METADATA.DATA_OPTIONS_INSERT);
+END;
+/
 
-REM ==== ネットワークにアクセスできるか確認 ====
-ping -n 1 SERVER >nul 2>&1
-if errorlevel 1 (
-    echo ネットワークに接続できません。サーバー: SERVER
-    pause
-    exit /b
-)
+SPOOL insert_data.sql;
 
-REM ==== .xlsxファイルをコピー ====
-echo コピー中... %SOURCE% → %TARGET%
-copy "%SOURCE%\*.xlsx" "%TARGET%" /Y
+SELECT DBMS_METADATA.GET_DDL('TABLE', table_name, 'MY_SCHEMA')
+  FROM dba_tables
+ WHERE owner = 'MY_SCHEMA';
 
-REM ==== 結果確認 ====
-if errorlevel 1 (
-    echo コピーに失敗しました。
-) else (
-    echo コピー完了しました。
-)
-
-pause
-
+SPOOL OFF;
