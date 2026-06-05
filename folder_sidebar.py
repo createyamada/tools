@@ -1,12 +1,11 @@
 import os
-import win32com.client
 import tkinter as tk
 from pathlib import Path
 import subprocess
 import sys
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import webbrowser
 import ctypes
@@ -170,7 +169,7 @@ class FolderSidebar:
         self.root.configure(bg=BG_COLOR)
 
         self.is_topmost = False
-
+        self.current_date = datetime.now().date()
         # ------------------------
         # HEADER
         # ------------------------
@@ -250,19 +249,77 @@ class FolderSidebar:
         # OUTLOOK TITLE
         # ------------------------
         self.schedule_urls = {}
-        schedule_title = tk.Label(
+
+        schedule_frame = tk.Frame(
             root,
-            text="📅 TODAY SCHEDULE",
+            bg=BG_COLOR
+        )
+
+        schedule_frame.pack(
+            fill="x",
+            padx=10,
+            pady=(0, 5)
+        )
+
+        today_button = tk.Button(
+            schedule_frame,
+            text="本日",
+            command=self.show_today,
+            bg="#2563EB",
+            fg="white",
+            borderwidth=0,
+            padx=8,
+            cursor="hand2"
+        )
+
+        today_button.pack(
+            side="left"
+        )
+
+        prev_button = tk.Button(
+            schedule_frame,
+            text="＜",
+            command=self.prev_day,
+            bg=BUTTON_BG,
+            fg="white",
+            borderwidth=0,
+            width=3,
+            cursor="hand2"
+        )
+
+        prev_button.pack(
+            side="left",
+            padx=(6, 4)
+        )
+
+        self.schedule_title = tk.Label(
+            schedule_frame,
             bg=BG_COLOR,
             fg="white",
             font=("Yu Gothic UI", 11, "bold")
         )
 
-        schedule_title.pack(
-            fill="x",
-            padx=10,
-            pady=(0, 5)
+        self.schedule_title.pack(
+            side="left",
+            expand=True
         )
+
+        next_button = tk.Button(
+            schedule_frame,
+            text="＞",
+            command=self.next_day,
+            bg=BUTTON_BG,
+            fg="white",
+            borderwidth=0,
+            width=3,
+            cursor="hand2"
+        )
+
+        next_button.pack(
+            side="right"
+        )
+
+        self.update_date_label()
 
         # ------------------------
         # SCHEDULE LIST
@@ -409,11 +466,65 @@ class FolderSidebar:
 
         self.refresh()
 
+    def update_date_label(self):
+
+        weekdays = [
+            "月",
+            "火",
+            "水",
+            "木",
+            "金",
+            "土",
+            "日"
+        ]
+
+        d = self.current_date
+
+        self.schedule_title.config(
+            text=(
+                f"📅 {d:%Y/%m/%d}"
+                f"（{weekdays[d.weekday()]}）"
+            )
+        )
+
+
+    def prev_day(self):
+
+        self.current_date -= timedelta(days=1)
+
+        self.update_date_label()
+
+        self.load_schedule()
+
+
+    def next_day(self):
+
+        self.current_date += timedelta(days=1)
+
+        self.update_date_label()
+
+        self.load_schedule()
+
+
+    def show_today(self):
+
+        self.current_date = datetime.now().date()
+
+        self.update_date_label()
+
+        self.load_schedule()
+
+
     # ------------------------
     # REFRESH
     # ------------------------
 
     def refresh(self):
+
+        self.current_date = datetime.now().date()
+
+        self.update_date_label()
+
 
         self.listbox.delete(0, tk.END)
 
@@ -530,128 +641,191 @@ class FolderSidebar:
 
         shortcut_path = Path(TARGET_FOLDER) / shortcut_name
 
-        shell = win32com.client.Dispatch("WScript.Shell")
+        powershell = f"""
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
+        $Shortcut.TargetPath = '{target}'
+        $Shortcut.WorkingDirectory = '{target.parent}'
+        $Shortcut.Save()
+        """
 
-        shortcut = shell.CreateShortCut(
-            str(shortcut_path)
-        )
+        try:
 
-        shortcut.Targetpath = str(target)
+            subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    powershell
+                ],
+                check=True,
+                capture_output=True
+            )
 
-        shortcut.WorkingDirectory = str(
-            target.parent
-        )
+        except Exception as e:
 
-        shortcut.save()
+            print("Shortcut Create Error:", e)
+            return
 
         self.path_entry.delete(0, tk.END)
 
         self.refresh()
 
-
     def load_schedule(self):
+
+        target_date = self.current_date
+        next_date = target_date + timedelta(days=1)
 
         self.schedule_listbox.delete(0, tk.END)
 
         self.schedule_urls = {}
 
+        ps_script = r'''
+    $ErrorActionPreference = "SilentlyContinue"
+
+    $outlook = New-Object -ComObject Outlook.Application
+    $namespace = $outlook.GetNamespace("MAPI")
+    $calendar = $namespace.GetDefaultFolder(9)
+
+    $items = $calendar.Items
+
+    # 定期予定展開に必須
+    $items.Sort("[Start]")
+    $items.IncludeRecurrences = $true
+
+    $today = Get-Date "__TARGET_DATE__"
+    $tomorrow = Get-Date "__NEXT_DATE__"
+
+    # 今日の予定のみ
+    $filter =
+    "[Start] >= '" +
+    $today.ToString("g") +
+    "' AND [Start] < '" +
+    $tomorrow.ToString("g") +
+    "'"
+
+    $restricted = $items.Restrict($filter)
+
+    $item = $restricted.GetFirst()
+
+    while($item -ne $null)
+    {
+        try
+        {
+            $subject = $item.Subject
+
+            $startTime = $item.Start.ToString("HH:mm")
+            $endTime   = $item.End.ToString("HH:mm")
+
+            $body = ""
+
+            try
+            {
+                $body = $item.Body
+            }
+            catch
+            {
+            }
+
+            $url = ""
+
+            if($body)
+            {
+                $match = [regex]::Match(
+                    $body,
+                    'https?://[^\s<>"'']+'
+                )
+
+                if($match.Success)
+                {
+                    $url = $match.Value
+                }
+            }
+
+            Write-Output (
+                $startTime + "|" +
+                $endTime + "|" +
+                $subject.Replace("|"," ") + "|" +
+                $url
+            )
+        }
+        catch
+        {
+        }
+
+        $item = $restricted.GetNext()
+    }
+    '''
+
+        ps_script = ps_script.replace(
+            "__TARGET_DATE__",
+            target_date.strftime("%Y-%m-%d")
+        )
+
+        ps_script = ps_script.replace(
+            "__NEXT_DATE__",
+            next_date.strftime("%Y-%m-%d")
+        )
+
         try:
 
-            outlook = win32com.client.Dispatch(
-                "Outlook.Application"
+            result = subprocess.check_output(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    ps_script
+                ],
+                text=True,
+                encoding="utf-8",
+                errors="ignore"
             )
 
-            namespace = outlook.GetNamespace("MAPI")
+            for line in result.splitlines():
 
-            calendar = namespace.GetDefaultFolder(9)
+                line = line.strip()
 
-            items = calendar.Items
+                if not line:
+                    continue
 
-            items.IncludeRecurrences = True
+                parts = line.split("|", 3)
 
-            items.Sort("[Start]")
+                if len(parts) != 4:
+                    continue
 
-            today = datetime.now().date()
+                start_time, end_time, title, url = parts
 
-            for item in items:
+                display_text = (
+                    f"{start_time}～{end_time}  {title}"
+                )
 
-                try:
+                index = self.schedule_listbox.size()
 
-                    start = item.Start
-                    end = item.End
+                self.schedule_listbox.insert(
+                    tk.END,
+                    display_text
+                )
 
-                    if start.date() != today:
-                        continue
+                if url:
 
-                    title = item.Subject
+                    self.schedule_urls[index] = url
 
-                    body = item.Body or ""
-
-                    url = None
-
-                    zoom_match = re.search(
-                        r"https://[\w\.-]*zoom\.us/j/\S+",
-                        body
+                    self.schedule_listbox.itemconfig(
+                        index,
+                        fg="#60A5FA"
                     )
 
-                    if zoom_match:
-                        url = zoom_match.group(0)
+        except subprocess.CalledProcessError as e:
 
-                    # Teams URL
-                    teams_match = re.search(
-                        r"https://teams\S+",
-                        body
-                    )
-
-                    if teams_match:
-                        url = teams_match.group(0)
-
-                    # Zoom URL
-                    if not url:
-
-                        # Teams URL
-                        teams_match = re.search(
-                            r"https://teams\S+",
-                            body
-                        )
-
-                        if teams_match:
-                            url = teams_match.group(0)
-
-                    time_text = (
-                        f"{start.strftime('%H:%M')}"
-                        f"～"
-                        f"{end.strftime('%H:%M')}"
-                    )
-
-                    display_text = (
-                        f"{time_text}  {title}"
-                    )
-
-                    index = self.schedule_listbox.size()
-
-                    self.schedule_listbox.insert(
-                        tk.END,
-                        display_text
-                    )
-
-                    if url:
-
-                        self.schedule_urls[index] = url
-
-                        self.schedule_listbox.itemconfig(
-                            index,
-                            fg="#60A5FA"
-                        )
-
-                except Exception as e:
-
-                    print(e)
+            print("PowerShell Error:")
+            print(e)
 
         except Exception as e:
 
             print("Outlook Error:", e)
-
 
     def show_window(self):
 
