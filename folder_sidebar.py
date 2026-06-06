@@ -88,7 +88,7 @@ def load_config():
 
     except Exception as e:
 
-        print("Config Load Error:", e)
+        # print("Config Load Error:", e)
 
         return DEFAULT_CONFIG
 
@@ -586,7 +586,7 @@ class FolderSidebar:
 
         filepath = Path(TARGET_FOLDER) / filename
 
-        print(filepath)
+        # print(filepath)
 
         try:
 
@@ -594,7 +594,7 @@ class FolderSidebar:
 
         except Exception as e:
 
-            print("OPEN ERROR:", e)
+            # print("OPEN ERROR:", e)
 
     # ------------------------
     # TOPMOST
@@ -632,7 +632,7 @@ class FolderSidebar:
             return
 
         if not os.path.exists(target_path):
-            print("Path not found")
+            # print("Path not found")
             return
 
         target = Path(target_path)
@@ -665,7 +665,7 @@ class FolderSidebar:
 
         except Exception as e:
 
-            print("Shortcut Create Error:", e)
+            # print("Shortcut Create Error:", e)
             return
 
         self.path_entry.delete(0, tk.END)
@@ -820,12 +820,12 @@ class FolderSidebar:
 
         except subprocess.CalledProcessError as e:
 
-            print("PowerShell Error:")
-            print(e)
+            # print("PowerShell Error:")
+            # print(e)
 
         except Exception as e:
 
-            print("Outlook Error:", e)
+            # print("Outlook Error:", e)
 
     def show_window(self):
 
@@ -869,7 +869,7 @@ class FolderSidebar:
         index = selection[0]
 
         url = self.schedule_urls.get(index)
-        print(url)
+        # print(url)
         if not url:
             return
 
