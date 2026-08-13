@@ -89,7 +89,7 @@ def quote_identifier(value):
 def to_sql_literal(value):
     """Excelセルの値をSQLの値表現へ変換する。"""
     if value is None:
-        return "NULL"
+        return "''"
     if isinstance(value, bool):
         return "TRUE" if value else "FALSE"
     if isinstance(value, datetime.datetime):
@@ -101,7 +101,11 @@ def to_sql_literal(value):
             return "NULL"
         return str(value)
 
-    escaped = str(value).replace("'", "''")
+    text = str(value)
+    if text.strip().lower() == "null":
+        return "NULL"
+
+    escaped = text.replace("'", "''")
     return f"'{escaped}'"
 
 
