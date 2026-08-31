@@ -1,30 +1,50 @@
-import ctypes
-from ctypes import wintypes
-from datetime import datetime, timedelta
-import html
-import json
 import os
+import tkinter as tk
 from pathlib import Path
-import re
 import subprocess
 import sys
 import threading
-import tkinter as tk
-from tkinter import messagebox
+import json
+from datetime import datetime, timedelta
+import re
 import webbrowser
+import ctypes
+from ctypes import wintypes
+import html
 import xml.etree.ElementTree as ET
 from urllib.parse import unquote
+from tkinter import messagebox
 
 # ------------------------
 # EXE対応・設定ファイル
 # ------------------------
 
-BASE_DIR = os.path.dirname(
-    sys.executable
-    if getattr(sys, "frozen", False)
-    else os.path.abspath(__file__)
+# ------------------------
+# EXE対応
+# ------------------------
+
+if getattr(sys, 'frozen', False):
+
+    BASE_DIR = os.path.dirname(
+        sys.executable
+    )
+
+else:
+
+    BASE_DIR = os.path.dirname(
+        os.path.abspath(__file__)
+    )
+
+
+# ------------------------
+# CONFIG
+# ------------------------
+
+CONFIG_FILE = os.path.join(
+    BASE_DIR,
+    "config.json"
 )
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+
 
 DEFAULT_CONFIG = {
     "target_folder": r"C:\Work",
@@ -42,24 +62,41 @@ DEFAULT_CONFIG = {
 }
 
 def save_config(config):
+
     try:
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as file:
+
             json.dump(config, file, indent=4, ensure_ascii=False)
+
     except OSError:
+
         pass
 
 def load_config():
+
     config = {}
+
     if os.path.exists(CONFIG_FILE):
+
         try:
+
             with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+
                 config = json.load(file)
+
         except (OSError, json.JSONDecodeError):
+
             pass
+
     merged = {**DEFAULT_CONFIG, **config}
+
     merged["window"] = {**DEFAULT_CONFIG["window"], **config.get("window", {})}
+
     if not os.path.exists(CONFIG_FILE):
+
         save_config(merged)
+
     return merged
 
 CONFIG = load_config()
@@ -79,69 +116,132 @@ BUTTON_BG = "#334155"
 BUTTON_ACTIVE = "#475569"
 
 def hotkey_listener(app):
-    """Ctrl + Alt + Spaceでウィンドウの表示を切り替える。"""
+
     user32 = ctypes.windll.user32
+
     user32.RegisterHotKey(None, 1, 0x0001 | 0x0002, 0x20)
+
     msg = wintypes.MSG()
+
     while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+
         if msg.message == 0x0312:
+
             app.root.after(0, app.toggle_sidebar)
 
 class FolderSidebar:
+
     def __init__(self, root):
-        self.root, self.config = root, CONFIG
+
+        self.root = root
+        self.config = CONFIG
+
         self.current_date = datetime.now().date()
-        self.schedule_urls, self.display_to_file = {}, {}
-        self.resize_start = self.save_job = None
+
+        self.schedule_urls = {}
+        self.display_to_file = {}
+
+        self.resize_start = None
+        self.save_job = None
         self.initial_sashes_set = False
+
         window = self.config["window"]
+
         root.overrideredirect(True)
         root.attributes("-topmost", bool(self.config["topmost"]))
         root.attributes("-alpha", float(self.config["alpha"]))
+
         root.geometry(f'{window["width"]}x{window["height"]}+{window["x"]}+{window["y"]}')
+
         root.minsize(720, 360)
         root.configure(bg=BG_COLOR)
+
         self.is_topmost = bool(self.config["topmost"])
+
         self.build_header()
-        self.panes = tk.PanedWindow(root, orient="horizontal", bg="white", sashwidth=5,
-                                    sashrelief="flat", borderwidth=0, opaqueresize=True)
+
+        self.panes = tk.PanedWindow(
+            root,
+            orient="horizontal",
+            bg="white",
+            sashwidth=5,
+            sashrelief="flat",
+            borderwidth=0,
+            opaqueresize=True
+        )
+
         self.panes.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+
         folder_panel = self.make_panel("📁 フォルダー一覧")
         schedule_panel = self.make_panel("📅 スケジュール")
         onenote_panel = self.make_panel("🟣 OneNote タスク管理")
+
         self.panes.add(folder_panel, minsize=190)
         self.panes.add(schedule_panel, minsize=220)
         self.panes.add(onenote_panel, minsize=260)
+
         self.build_folder_panel(folder_panel)
         self.build_schedule_panel(schedule_panel)
         self.build_onenote_panel(onenote_panel)
         self.build_resize_grip()
+
         root.bind("<Escape>", lambda _e: root.destroy())
         root.bind("<Control-Shift-space>", self.toggle_topmost)
         root.bind("<Configure>", self.schedule_config_save)
+
         self.panes.bind("<ButtonRelease-1>", self.save_layout)
+
         root.after(100, self.restore_sashes)
+
         self.refresh()
 
     def build_header(self):
+
         # ------------------------
         # HEADER
         # ------------------------
 
         header = tk.Frame(self.root, bg=BG_COLOR)
+
         header.pack(fill="x", padx=14, pady=(10, 8))
+
         header.bind("<ButtonPress-1>", self.start_move)
         header.bind("<B1-Motion>", self.move_window)
-        title = tk.Label(header, text="WORKSPACE SIDEBAR", bg=BG_COLOR, fg="white",
-                         font=("Yu Gothic UI", 15, "bold"))
+
+        title = tk.Label(
+            header,
+            text="WORKSPACE SIDEBAR",
+            bg=BG_COLOR,
+            fg="white",
+            font=("Yu Gothic UI", 15, "bold")
+        )
+
         title.pack(side="left")
+
         title.bind("<ButtonPress-1>", self.start_move)
         title.bind("<B1-Motion>", self.move_window)
-        tk.Button(header, text="✕", command=self.root.destroy, bg=BG_COLOR, fg=SUB_TEXT,
-                  activebackground=BG_COLOR, borderwidth=0).pack(side="right")
-        self.pin_label = tk.Label(header, text="📌 ON" if self.is_topmost else "📌 OFF",
-                                  bg=BG_COLOR, fg="#60A5FA" if self.is_topmost else SUB_TEXT)
+
+        close_button = tk.Button(
+            header,
+            text="✕",
+            command=self.root.destroy,
+            bg=BG_COLOR,
+            fg=SUB_TEXT,
+            activebackground=BG_COLOR,
+            borderwidth=0
+        )
+
+        close_button.pack(side="right")
+
+        self.pin_label = tk.Label(
+            header,
+            text="📌 ON" if self.is_topmost else "📌 OFF",
+            bg=BG_COLOR,
+            fg="#60A5FA" if self.is_topmost else SUB_TEXT
+        )
+
         self.pin_label.pack(side="right", padx=8)
+
         self.pin_label.bind("<Button-1>", self.toggle_topmost)
 
     def make_panel(self, title):
@@ -163,8 +263,16 @@ class FolderSidebar:
         return panel
 
     def make_entry(self, parent, width=None):
-        return tk.Entry(parent, width=width, bg="#374151", fg="white", insertbackground="white",
-                        borderwidth=0, font=("Yu Gothic UI", 9))
+
+        return tk.Entry(
+            parent,
+            width=width,
+            bg="#374151",
+            fg="white",
+            insertbackground="white",
+            borderwidth=0,
+            font=("Yu Gothic UI", 9)
+        )
 
     def small_button(self, parent, text, command):
         return tk.Button(
@@ -334,23 +442,37 @@ class FolderSidebar:
         save_config(self.config)
 
     def update_date_label(self):
+
         weekdays = ["月", "火", "水", "木", "金", "土", "日"]
+
         d = self.current_date
-        self.schedule_title.config(text=f"{d:%Y/%m/%d}（{weekdays[d.weekday()]}）")
+
+        self.schedule_title.config(
+            text=f"{d:%Y/%m/%d}（{weekdays[d.weekday()]}）"
+        )
 
     def prev_day(self):
+
         self.current_date -= timedelta(days=1)
+
         self.update_date_label()
+
         self.load_schedule()
 
     def next_day(self):
+
         self.current_date += timedelta(days=1)
+
         self.update_date_label()
+
         self.load_schedule()
 
     def show_today(self):
+
         self.current_date = datetime.now().date()
+
         self.update_date_label()
+
         self.load_schedule()
 
     def refresh(self):
@@ -647,8 +769,6 @@ foreach ($appointment in $appointments)
 
     @staticmethod
     def parse_onenote_tables(xml_text, user_name):
-        """OneNote XML内の表から担当者に一致するタスクを抽出する。"""
-
         root = ET.fromstring(xml_text.lstrip("\ufeff"))
         tasks = []
 
