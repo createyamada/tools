@@ -538,10 +538,18 @@ class FolderSidebar:
 
                     icon = self.get_icon(f)
 
+                    # .lnkのみ拡張子を隠す
+                    display_name = (
+                        f.stem
+                        if f.suffix.lower() == ".lnk"
+                        else f.name
+                    )
+
                     self.listbox.insert(
                         tk.END,
-                        f"{icon}  {f.name}"
+                        f"{icon}  {display_name}"
                     )
+        self.display_to_file[display_name] = f.name
         self.load_schedule()
 
     # ------------------------
@@ -582,11 +590,14 @@ class FolderSidebar:
 
         text = self.listbox.get(selection[0])
 
-        filename = text.split("  ", 1)[1]
+        display_name = text.split("  ", 1)[1]
+
+        filename = self.display_to_file.get(
+            display_name,
+            display_name
+        )
 
         filepath = Path(TARGET_FOLDER) / filename
-
-        # print(filepath)
 
         try:
 
@@ -665,7 +676,7 @@ class FolderSidebar:
 
         except Exception as e:
 
-            # print("Shortcut Create Error:", e)
+            print("Shortcut Create Error:", e)
             return
 
         self.path_entry.delete(0, tk.END)
@@ -737,10 +748,14 @@ class FolderSidebar:
                     'https?://[^\s<>"'']+'
                 )
 
-                if($match.Success)
-                {
-                    $url = $match.Value
+                # Zoom URLを優先
+                $url = ($matches | Where-Object { $_.Value-match 'zoom\.us'} | Select-Object -First 1).Value
+
+                # ZoomがなければTeams URL
+                if (-not $url) {
+                    $url = ($matches | Where-Object { $_.Value -match 'teams\.microsoft\.com' -or $_.Value -match 'teams\.live\.com' } | Select-Object -First ).Value
                 }
+
             }
 
             Write-Output (
@@ -820,12 +835,12 @@ class FolderSidebar:
 
         except subprocess.CalledProcessError as e:
 
-            # print("PowerShell Error:")
-            # print(e)
+            print("PowerShell Error:")
+            print(e)
 
         except Exception as e:
 
-            # print("Outlook Error:", e)
+            print("Outlook Error:", e)
 
     def show_window(self):
 
@@ -869,7 +884,7 @@ class FolderSidebar:
         index = selection[0]
 
         url = self.schedule_urls.get(index)
-        # print(url)
+        print(url)
         if not url:
             return
 
