@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import json
+import base64
 from datetime import datetime, timedelta
 import re
 import webbrowser
@@ -61,6 +62,10 @@ DEFAULT_CONFIG = {
     "onenote_pages": [],
 }
 
+# ------------------------
+# CONFIG SAVE
+# ------------------------
+
 def save_config(config):
 
     try:
@@ -72,6 +77,10 @@ def save_config(config):
     except OSError:
 
         pass
+
+# ------------------------
+# CONFIG LOAD
+# ------------------------
 
 def load_config():
 
@@ -114,6 +123,11 @@ SUB_TEXT = "#94A3B8"
 SELECT_BG = "#2563EB"
 BUTTON_BG = "#334155"
 BUTTON_ACTIVE = "#475569"
+CONTROL_AREA_HEIGHT = 72
+
+# ------------------------
+# HOTKEY
+# ------------------------
 
 def hotkey_listener(app):
 
@@ -128,6 +142,10 @@ def hotkey_listener(app):
         if msg.message == 0x0312:
 
             app.root.after(0, app.toggle_sidebar)
+
+# ------------------------
+# MAIN WINDOW
+# ------------------------
 
 class FolderSidebar:
 
@@ -164,7 +182,7 @@ class FolderSidebar:
             root,
             orient="horizontal",
             bg="white",
-            sashwidth=5,
+            sashwidth=2,
             sashrelief="flat",
             borderwidth=0,
             opaqueresize=True
@@ -210,7 +228,7 @@ class FolderSidebar:
 
         title = tk.Label(
             header,
-            text="WORKSPACE SIDEBAR",
+            text="WORKSPACE WIDGET",
             bg=BG_COLOR,
             fg="white",
             font=("Yu Gothic UI", 15, "bold")
@@ -274,6 +292,10 @@ class FolderSidebar:
             font=("Yu Gothic UI", 9)
         )
 
+    # ------------------------
+    # BUTTON
+    # ------------------------
+
     def small_button(self, parent, text, command):
         return tk.Button(
             parent,
@@ -284,43 +306,83 @@ class FolderSidebar:
             borderwidth=0,
         )
 
+    def update_button(self, parent, text, command):
+
+        button = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=BUTTON_BG,
+            fg="white",
+            activebackground=BUTTON_ACTIVE,
+            activeforeground="white",
+            borderwidth=0
+        )
+
+        button.pack(
+            anchor="w",
+            padx=0,
+            pady=(0, 6)
+        )
+
+    def control_area(self, panel):
+
+        area = tk.Frame(
+            panel,
+            bg=CARD_COLOR,
+            height=CONTROL_AREA_HEIGHT
+        )
+
+        area.pack(
+            fill="x",
+            padx=10
+        )
+
+        area.pack_propagate(False)
+
+        return area
+
     def build_folder_panel(self, panel):
         # ------------------------
         # フォルダー一覧
         # ------------------------
 
-        self.listbox = tk.Listbox(panel, bg=LIST_BG, fg=TEXT_COLOR, selectbackground=SELECT_BG,
-                                  activestyle="none", borderwidth=0, highlightthickness=0,
-                                  font=("Yu Gothic UI", 10))
-        self.listbox.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-        self.listbox.bind("<Double-Button-1>", self.open_file)
-        register = tk.Frame(panel, bg=CARD_COLOR)
-        register.pack(fill="x", padx=10, pady=(0, 8))
+        control = self.control_area(panel)
+
+        self.update_button(
+            control,
+            "↻ フォルダー更新",
+            self.refresh_folder
+        )
+
+        register = tk.Frame(control, bg=CARD_COLOR)
+        register.pack(fill="x")
         self.path_entry = self.make_entry(register)
         self.path_entry.pack(side="left", fill="x", expand=True, ipady=6)
         tk.Button(register, text="＋", command=self.create_shortcut, bg=SELECT_BG, fg="white",
                   borderwidth=0, width=4).pack(side="right", padx=(6, 0))
-        tk.Button(
-            panel,
-            text="↻ 更新",
-            command=self.refresh,
-            bg=BUTTON_BG,
-            fg="white",
-            activebackground=BUTTON_ACTIVE,
-            borderwidth=0,
-        ).pack(
-            anchor="w",
-            padx=10,
-            pady=(0, 10),
-        )
+
+        self.listbox = tk.Listbox(panel, bg=LIST_BG, fg=TEXT_COLOR, selectbackground=SELECT_BG,
+                                  activestyle="none", borderwidth=0, highlightthickness=0,
+                                  font=("Yu Gothic UI", 10))
+        self.listbox.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.listbox.bind("<Double-Button-1>", self.open_file)
 
     def build_schedule_panel(self, panel):
         # ------------------------
         # Outlookスケジュール
         # ------------------------
 
-        nav = tk.Frame(panel, bg=CARD_COLOR)
-        nav.pack(fill="x", padx=10, pady=(0, 8))
+        control = self.control_area(panel)
+
+        self.update_button(
+            control,
+            "↻ スケジュール更新",
+            self.load_schedule
+        )
+
+        nav = tk.Frame(control, bg=CARD_COLOR)
+        nav.pack(fill="x")
         self.small_button(nav, "本日", self.show_today).pack(side="left")
         self.small_button(nav, "＜", self.prev_day).pack(side="left", padx=(5, 2))
         self.schedule_title = tk.Label(
@@ -346,16 +408,22 @@ class FolderSidebar:
 
         configured_user = self.config.get("user_name") or "未設定"
 
+        control = self.control_area(panel)
+
+        self.update_button(
+            control,
+            "↻ OneNote更新",
+            self.load_onenote_tasks
+        )
+
         tk.Label(
-            panel,
+            control,
             text=f"担当者: {configured_user}",
             bg=CARD_COLOR,
             fg=SUB_TEXT,
             anchor="w",
-        ).pack(fill="x", padx=10, pady=(0, 6))
+        ).pack(fill="x")
 
-        tk.Button(panel, text="↻ OneNote更新", command=self.load_onenote_tasks,
-                  bg=BUTTON_BG, fg="white", borderwidth=0).pack(anchor="w", padx=10, pady=(0, 6))
         container = tk.Frame(panel, bg=LIST_BG)
         container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         self.note_canvas = tk.Canvas(container, bg=LIST_BG, highlightthickness=0)
@@ -389,6 +457,10 @@ class FolderSidebar:
         grip.bind("<ButtonPress-1>", self.start_resize)
         grip.bind("<B1-Motion>", self.resize_window)
 
+    # ------------------------
+    # WINDOW MOVE
+    # ------------------------
+
     def start_move(self, event):
         self.move_start = (
             event.x_root - self.root.winfo_x(),
@@ -397,6 +469,10 @@ class FolderSidebar:
 
     def move_window(self, event):
         self.root.geometry(f"+{event.x_root - self.move_start[0]}+{event.y_root - self.move_start[1]}")
+
+    # ------------------------
+    # WINDOW RESIZE
+    # ------------------------
 
     def start_resize(self, event):
         self.resize_start = (
@@ -411,6 +487,10 @@ class FolderSidebar:
             x, y, width, height = self.resize_start
             self.root.geometry(f"{max(720, width + event.x_root - x)}x{max(360, height + event.y_root - y)}")
 
+    # ------------------------
+    # LAYOUT RESTORE
+    # ------------------------
+
     def restore_sashes(self):
         widths = self.config.get("column_widths", DEFAULT_CONFIG["column_widths"])
         if len(widths) >= 2:
@@ -422,6 +502,10 @@ class FolderSidebar:
         if self.save_job:
             self.root.after_cancel(self.save_job)
         self.save_job = self.root.after(400, self.save_layout)
+
+    # ------------------------
+    # LAYOUT SAVE
+    # ------------------------
 
     def save_layout(self, _event=None):
         # ------------------------
@@ -440,6 +524,10 @@ class FolderSidebar:
             "y": self.root.winfo_y(),
         }
         save_config(self.config)
+
+    # ------------------------
+    # SCHEDULE DATE
+    # ------------------------
 
     def update_date_label(self):
 
@@ -475,10 +563,17 @@ class FolderSidebar:
 
         self.load_schedule()
 
+    # ------------------------
+    # REFRESH
+    # ------------------------
+
     def refresh(self):
-        # ------------------------
-        # 全データ更新
-        # ------------------------
+
+        self.refresh_folder()
+        self.load_schedule()
+        self.load_onenote_tasks()
+
+    def refresh_folder(self):
 
         self.listbox.delete(0, tk.END)
         self.display_to_file = {}
@@ -493,8 +588,9 @@ class FolderSidebar:
         else:
             self.listbox.insert(tk.END, f"フォルダーが見つかりません: {folder}")
 
-        self.load_schedule()
-        self.load_onenote_tasks()
+    # ------------------------
+    # ICON
+    # ------------------------
 
     def get_icon(self, path):
         if path.is_dir():
@@ -513,6 +609,10 @@ class FolderSidebar:
 
         return icons.get(path.suffix.lower(), "📄")
 
+    # ------------------------
+    # OPEN FILE
+    # ------------------------
+
     def open_file(self, _event):
         selection = self.listbox.curselection()
         if selection:
@@ -521,6 +621,10 @@ class FolderSidebar:
             if path.exists():
                 os.startfile(str(path))
 
+    # ------------------------
+    # TOPMOST
+    # ------------------------
+
     def toggle_topmost(self, _event=None):
         self.is_topmost = not self.is_topmost
         self.root.attributes("-topmost", self.is_topmost)
@@ -528,6 +632,10 @@ class FolderSidebar:
                               fg="#60A5FA" if self.is_topmost else SUB_TEXT)
         self.config["topmost"] = self.is_topmost
         save_config(self.config)
+
+    # ------------------------
+    # CREATE SHORTCUT
+    # ------------------------
 
     def create_shortcut(self):
         target_text = self.path_entry.get().strip().strip('"')
@@ -566,86 +674,132 @@ class FolderSidebar:
         except subprocess.CalledProcessError:
             messagebox.showerror("登録", "ショートカットを作成できませんでした。")
 
+    # ------------------------
+    # OUTLOOK SCHEDULE
+    # ------------------------
+
     def load_schedule(self):
-        # ------------------------
-        # Outlook予定取得
-        # ------------------------
+
+        target_date = self.current_date
+        next_date = target_date + timedelta(days=1)
 
         self.schedule_listbox.delete(0, tk.END)
+
         self.schedule_urls = {}
 
-        target = self.current_date
-        next_date = self.current_date + timedelta(days=1)
+        ps_script = r'''
+    $ErrorActionPreference = "SilentlyContinue"
 
-        script = r'''
-$ErrorActionPreference = "Stop"
+    $outlook = New-Object -ComObject Outlook.Application
+    $namespace = $outlook.GetNamespace("MAPI")
+    $calendar = $namespace.GetDefaultFolder(9)
 
-$outlook = New-Object -ComObject Outlook.Application
-$namespace = $outlook.GetNamespace("MAPI")
-$items = $namespace.GetDefaultFolder(9).Items
+    $items = $calendar.Items
 
-$items.Sort("[Start]")
-$items.IncludeRecurrences = $true
+    # 定期予定展開に必須
+    $items.Sort("[Start]")
+    $items.IncludeRecurrences = $true
 
-$targetDate = Get-Date "__START__"
-$nextDate = Get-Date "__END__"
+    $today = Get-Date "__TARGET_DATE__"
+    $tomorrow = Get-Date "__NEXT_DATE__"
 
-$filter =
+    # 今日の予定のみ
+    $filter =
     "[Start] >= '" +
-    $targetDate.ToString("g") +
+    $today.ToString("g") +
     "' AND [Start] < '" +
-    $nextDate.ToString("g") +
+    $tomorrow.ToString("g") +
     "'"
 
-$appointments = $items.Restrict($filter)
+    $restricted = $items.Restrict($filter)
 
-foreach ($appointment in $appointments)
-{
-    $body = ""
+    $item = $restricted.GetFirst()
 
-    try
+    function Encode-Text($text)
     {
-        $body = $appointment.Body
-    }
-    catch
-    {
-    }
+        if($null -eq $text)
+        {
+            $text = ""
+        }
 
-    $urls =
-        [regex]::Matches($body, 'https?://[^\s<>"'']+') |
-        ForEach-Object { $_.Value }
-
-    $url =
-        $urls |
-        Where-Object { $_ -match 'zoom\.us' } |
-        Select-Object -First 1
-
-    if (-not $url)
-    {
-        $url =
-            $urls |
-            Where-Object { $_ -match 'teams\.(microsoft|live)\.com' } |
-            Select-Object -First 1
+        return [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes(
+                [string]$text
+            )
+        )
     }
 
-    Write-Output (
-        $appointment.Start.ToString("HH:mm") + "|" +
-        $appointment.End.ToString("HH:mm") + "|" +
-        $appointment.Subject.Replace("|", " ") + "|" +
-        $url
-    )
-}
-'''
+    while($item -ne $null)
+    {
+        try
+        {
+            $subject = $item.Subject
 
-        script = script.replace(
-            "__START__",
-            target.strftime("%Y-%m-%d"),
-        ).replace(
-            "__END__",
-            next_date.strftime("%Y-%m-%d"),
+            $startTime = $item.Start.ToString("HH:mm")
+            $endTime   = $item.End.ToString("HH:mm")
+
+            $body = ""
+
+            try
+            {
+                $body = $item.Body
+            }
+            catch
+            {
+            }
+
+            $url = ""
+
+            if($body)
+            {
+                $matches = [regex]::Matches(
+                    $body,
+                    'https?://[^\s<>"'']+'
+                )
+
+                # Zoom URLを優先
+                $url = ($matches | Where-Object { $_.Value -match 'zoom\.us' } | Select-Object -First 1).Value
+
+                # ZoomがなければTeams URL
+                if (-not $url)
+                {
+                    $url = ($matches | Where-Object { $_.Value -match 'teams\.microsoft\.com' -or $_.Value -match 'teams\.live\.com' } | Select-Object -First 1).Value
+                }
+
+                # ZoomとTeamsがなければ最初のURL
+                if (-not $url -and $matches.Count -gt 0)
+                {
+                    $url = $matches[0].Value
+                }
+            }
+
+            Write-Output (
+                (Encode-Text $startTime) + "|" +
+                (Encode-Text $endTime) + "|" +
+                (Encode-Text $subject) + "|" +
+                (Encode-Text $url)
+            )
+        }
+        catch
+        {
+        }
+
+        $item = $restricted.GetNext()
+    }
+    '''
+
+        ps_script = ps_script.replace(
+            "__TARGET_DATE__",
+            target_date.strftime("%Y-%m-%d")
+        )
+
+        ps_script = ps_script.replace(
+            "__NEXT_DATE__",
+            next_date.strftime("%Y-%m-%d")
         )
 
         try:
+
             result = subprocess.check_output(
                 [
                     "powershell",
@@ -653,28 +807,64 @@ foreach ($appointment in $appointments)
                     "-ExecutionPolicy",
                     "Bypass",
                     "-Command",
-                    script,
+                    ps_script
                 ],
                 text=True,
                 encoding="utf-8",
-                errors="ignore",
-                timeout=30,
+                errors="ignore"
             )
 
             for line in result.splitlines():
-                parts = line.strip().split("|", 3)
 
-                if len(parts) == 4:
-                    start, end, title, url = parts
-                    index = self.schedule_listbox.size()
+                line = line.strip()
 
-                    self.schedule_listbox.insert(tk.END, f"{start}～{end}  {title}")
+                if not line:
+                    continue
 
-                    if url:
-                        self.schedule_urls[index] = url
-                        self.schedule_listbox.itemconfig(index, fg="#60A5FA")
-        except Exception:
-            self.schedule_listbox.insert(tk.END, "Outlookの予定を取得できませんでした")
+                parts = line.split("|", 3)
+
+                if len(parts) != 4:
+                    continue
+
+                try:
+
+                    start_time, end_time, title, url = [
+                        base64.b64decode(value).decode("utf-8")
+                        for value in parts
+                    ]
+
+                except (ValueError, UnicodeDecodeError):
+
+                    continue
+
+                display_text = (
+                    f"{start_time}～{end_time}  {title}"
+                )
+
+                index = self.schedule_listbox.size()
+
+                self.schedule_listbox.insert(
+                    tk.END,
+                    display_text
+                )
+
+                if url:
+
+                    self.schedule_urls[index] = url
+
+                    self.schedule_listbox.itemconfig(
+                        index,
+                        fg="#60A5FA"
+                    )
+
+        except subprocess.CalledProcessError as e:
+
+            print("PowerShell Error:")
+            print(e)
+
+        except Exception as e:
+
+            print("Outlook Error:", e)
 
     def open_meeting(self, _event):
         selection = self.schedule_listbox.curselection()
@@ -682,11 +872,11 @@ foreach ($appointment in $appointments)
         if selection and selection[0] in self.schedule_urls:
             webbrowser.open(self.schedule_urls[selection[0]])
 
-    def load_onenote_tasks(self):
-        # ------------------------
-        # OneNoteタスク取得・表示
-        # ------------------------
+    # ------------------------
+    # ONENOTE TASK
+    # ------------------------
 
+    def load_onenote_tasks(self):
         for child in self.note_content.winfo_children():
             child.destroy()
 
@@ -699,15 +889,19 @@ foreach ($appointment in $appointments)
             )
             return
 
-        if not self.config.get("user_name"):
-            self.note_message(
-                "config.jsonのuser_nameに担当者名を設定してください",
-                "#FBBF24",
-            )
-            return
         for page in pages:
-            link = page.get("link", "")
-            title = tk.Label(self.note_content, text=f'▸ {page.get("name", "OneNote")}', bg=LIST_BG,
+
+            if isinstance(page, str):
+
+                link = page
+                page_name = "OneNote"
+
+            else:
+
+                link = page.get("link", "")
+                page_name = page.get("name", "OneNote")
+
+            title = tk.Label(self.note_content, text=f"▸ {page_name}", bg=LIST_BG,
                              fg="#A78BFA", cursor="hand2", anchor="w", font=("Yu Gothic UI", 10, "bold"))
             title.pack(fill="x", padx=10, pady=(9, 3))
             title.bind("<Button-1>", lambda _e, url=link: self.open_onenote(url))
@@ -727,26 +921,40 @@ foreach ($appointment in $appointments)
                  font=("Yu Gothic UI", 9), wraplength=340).pack(fill="x", padx=10, pady=2)
 
     def open_onenote(self, link):
+
+        link = self.normalize_onenote_link(link)
+
         try:
+
             os.startfile(link)
+
         except OSError:
+
             webbrowser.open(link)
 
     def get_onenote_tasks(self, link, user_name):
-        decoded_link = unquote(link)
-        match = re.search(r"page-id=(\{?[0-9a-fA-F-]{36}\}?)", decoded_link, re.I)
+
+        decoded_link = self.normalize_onenote_link(link)
+
+        match = re.search(
+            r"page-id\s*=?\s*((?:\{[^}]+\})+|[^&#\s]+)",
+            decoded_link,
+            re.I
+        )
 
         if not match:
+
             raise ValueError("リンクにpage-idがありません")
 
         page_id = "{" + match.group(1).strip("{}").upper() + "}"
+        page_id = page_id.replace("'", "''")
 
         script = (
             "$ErrorActionPreference='Stop'; "
+            "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); "
             "$oneNote=New-Object -ComObject OneNote.Application; "
             "$xml=''; "
             f"$oneNote.GetPageContent('{page_id}',[ref]$xml); "
-            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
             "[Console]::Write($xml)"
         )
 
@@ -766,6 +974,16 @@ foreach ($appointment in $appointments)
         )
 
         return self.parse_onenote_tables(xml_text, user_name)
+
+    @staticmethod
+    def normalize_onenote_link(link):
+
+        link = html.unescape(unquote(link.strip()))
+
+        return (
+            link.replace("￥", "\\")
+                .replace("＃", "#")
+        )
 
     @staticmethod
     def parse_onenote_tables(xml_text, user_name):
@@ -816,7 +1034,10 @@ foreach ($appointment in $appointments)
                     for name in re.split(r"[,、;/\n]", row[assignee])
                 ]
 
-                if user_name.strip().casefold() in names:
+                if (
+                    not user_name.strip()
+                    or user_name.strip().casefold() in names
+                ):
                     tasks.append(
                         (
                             row[task_column] or "（タスク名なし）",
@@ -825,6 +1046,10 @@ foreach ($appointment in $appointments)
                     )
 
         return tasks
+
+    # ------------------------
+    # SIDEBAR DISPLAY
+    # ------------------------
 
     def toggle_sidebar(self):
         if self.root.state() == "withdrawn":
