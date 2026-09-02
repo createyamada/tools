@@ -1292,7 +1292,14 @@ class FolderSidebar:
     @staticmethod
     def normalize_onenote_link(link):
 
-        link = html.unescape(unquote(link.strip()))
+        link = unquote(link.strip())
+
+        link = re.sub(
+            r"&(?:amp|#0*38|#x0*26);",
+            "&",
+            link,
+            flags=re.I
+        )
 
         return (
             link.replace("￥", "\\")
