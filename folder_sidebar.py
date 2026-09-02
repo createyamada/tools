@@ -74,9 +74,11 @@ def save_config(config):
 
             json.dump(config, file, indent=4, ensure_ascii=False)
 
+        return True
+
     except OSError:
 
-        pass
+        return False
 
 # ------------------------
 # CONFIG LOAD
@@ -410,11 +412,37 @@ class FolderSidebar:
 
         control = self.control_area(panel)
 
-        self.update_button(
+        button_area = tk.Frame(
             control,
-            "↻ OneNote更新",
-            self.load_onenote_tasks
+            bg=CARD_COLOR
         )
+
+        button_area.pack(
+            fill="x",
+            pady=(0, 6)
+        )
+
+        tk.Button(
+            button_area,
+            text="↻ OneNote更新",
+            command=self.load_onenote_tasks,
+            bg=BUTTON_BG,
+            fg="white",
+            activebackground=BUTTON_ACTIVE,
+            activeforeground="white",
+            borderwidth=0
+        ).pack(side="left")
+
+        tk.Button(
+            button_area,
+            text="＋ ページ追加",
+            command=self.show_onenote_page_dialog,
+            bg=SELECT_BG,
+            fg="white",
+            activebackground="#1D4ED8",
+            activeforeground="white",
+            borderwidth=0
+        ).pack(side="left", padx=(6, 0))
 
         tk.Label(
             control,
@@ -875,6 +903,152 @@ class FolderSidebar:
     # ------------------------
     # ONENOTE TASK
     # ------------------------
+
+    def show_onenote_page_dialog(self):
+
+        dialog = tk.Toplevel(self.root)
+
+        dialog.title("OneNoteページ追加")
+        dialog.configure(bg=CARD_COLOR)
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        width = 520
+        height = 230
+
+        self.root.update_idletasks()
+
+        x = self.root.winfo_x() + (self.root.winfo_width() - width) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - height) // 2
+
+        dialog.geometry(
+            f"{width}x{height}+{x}+{y}"
+        )
+
+        tk.Label(
+            dialog,
+            text="OneNoteの表示名",
+            bg=CARD_COLOR,
+            fg=TEXT_COLOR,
+            anchor="w"
+        ).pack(fill="x", padx=18, pady=(18, 5))
+
+        name_entry = self.make_entry(dialog)
+        name_entry.pack(fill="x", padx=18, ipady=7)
+
+        tk.Label(
+            dialog,
+            text="OneNoteページを右クリックして取得したリンク",
+            bg=CARD_COLOR,
+            fg=TEXT_COLOR,
+            anchor="w"
+        ).pack(fill="x", padx=18, pady=(14, 5))
+
+        link_entry = self.make_entry(dialog)
+        link_entry.pack(fill="x", padx=18, ipady=7)
+
+        button_area = tk.Frame(
+            dialog,
+            bg=CARD_COLOR
+        )
+
+        button_area.pack(
+            fill="x",
+            padx=18,
+            pady=(18, 0)
+        )
+
+        def register_page():
+
+            page_name = name_entry.get().strip()
+            page_link = link_entry.get().strip()
+
+            if not page_name:
+
+                messagebox.showwarning(
+                    "OneNoteページ追加",
+                    "OneNoteの表示名を入力してください。",
+                    parent=dialog
+                )
+
+                name_entry.focus_set()
+                return
+
+            if not page_link:
+
+                messagebox.showwarning(
+                    "OneNoteページ追加",
+                    "OneNoteページのリンクを入力してください。",
+                    parent=dialog
+                )
+
+                link_entry.focus_set()
+                return
+
+            pages = self.config.setdefault(
+                "onenote_pages",
+                []
+            )
+
+            page_data = {
+                "name": page_name,
+                "link": page_link
+            }
+
+            pages.append(page_data)
+
+            if not save_config(self.config):
+
+                pages.pop()
+
+                messagebox.showerror(
+                    "OneNoteページ追加",
+                    "config.jsonへ保存できませんでした。",
+                    parent=dialog
+                )
+
+                return
+
+            dialog.destroy()
+
+            self.load_onenote_tasks()
+
+        tk.Button(
+            button_area,
+            text="登録",
+            command=register_page,
+            bg=SELECT_BG,
+            fg="white",
+            activebackground="#1D4ED8",
+            activeforeground="white",
+            borderwidth=0,
+            width=10
+        ).pack(side="right")
+
+        tk.Button(
+            button_area,
+            text="キャンセル",
+            command=dialog.destroy,
+            bg=BUTTON_BG,
+            fg="white",
+            activebackground=BUTTON_ACTIVE,
+            activeforeground="white",
+            borderwidth=0,
+            width=10
+        ).pack(side="right", padx=(0, 8))
+
+        dialog.bind(
+            "<Return>",
+            lambda _event: register_page()
+        )
+
+        dialog.bind(
+            "<Escape>",
+            lambda _event: dialog.destroy()
+        )
+
+        name_entry.focus_set()
 
     def load_onenote_tasks(self):
         for child in self.note_content.winfo_children():
