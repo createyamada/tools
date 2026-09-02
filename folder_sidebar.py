@@ -1199,6 +1199,18 @@ class FolderSidebar:
 
                 section_path = "\\\\" + section_path.lstrip("\\")
 
+        page_name_match = re.search(
+            r"\.one#([^&]+)",
+            decoded_link,
+            re.I
+        )
+
+        page_name = ""
+
+        if page_name_match:
+
+            page_name = page_name_match.group(1).strip()
+
         page_id_data = base64.b64encode(
             page_id.encode("utf-8")
         ).decode("ascii")
@@ -1207,18 +1219,35 @@ class FolderSidebar:
             section_path.encode("utf-8")
         ).decode("ascii")
 
+        page_name_data = base64.b64encode(
+            page_name.encode("utf-8")
+        ).decode("ascii")
+
         script = (
             "$ErrorActionPreference='Stop'; "
             "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
             f"$pageId=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{page_id_data}')); "
             f"$sectionPath=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{section_path_data}')); "
+            f"$pageName=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{page_name_data}')); "
             "$oneNote=New-Object -ComObject OneNote.Application; "
-            "if($sectionPath){ "
             "$sectionId=''; "
+            "if($sectionPath){ "
             "$oneNote.OpenHierarchy($sectionPath,'',[ref]$sectionId,0); "
             "}; "
+            "$hierarchy=''; "
+            "$oneNote.GetHierarchy($sectionId,4,[ref]$hierarchy,2); "
+            "[xml]$hierarchyXml=$hierarchy; "
+            "$pages=@($hierarchyXml.SelectNodes(\"//*[local-name()='Page']\")); "
+            "$pageNode=$pages | Where-Object { $_.ID -eq $pageId } | Select-Object -First 1; "
+            "if(-not $pageNode -and $pageName){ "
+            "$pageNode=$pages | Where-Object { $_.name -eq $pageName } | Select-Object -First 1; "
+            "}; "
+            "if(-not $pageNode){ "
+            "throw (\"OneNoteページが見つかりません: \" + $pageName); "
+            "}; "
+            "$actualPageId=$pageNode.ID; "
             "$xml=''; "
-            "$oneNote.GetPageContent($pageId,[ref]$xml,0); "
+            "$oneNote.GetPageContent($actualPageId,[ref]$xml,0,2); "
             "[Console]::Write($xml)"
         )
 
