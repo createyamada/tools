@@ -112,6 +112,62 @@ def load_config():
 
 CONFIG = load_config()
 
+# ------------------------
+# TEMPORARY ONENOTE XML DEBUG START
+# 調査完了後にこのブロックと呼び出し部分を削除する
+# ------------------------
+
+def save_onenote_debug_xml(xml_text, page_name):
+
+    try:
+
+        debug_folder = Path(BASE_DIR) / "onenote_debug_xml"
+
+        debug_folder.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        safe_name = re.sub(
+            r'[\\/:*?"<>|]+',
+            "_",
+            page_name
+        ).strip()
+
+        if not safe_name:
+
+            safe_name = "onenote_page"
+
+        timestamp = datetime.now().strftime(
+            "%Y%m%d_%H%M%S"
+        )
+
+        debug_file = debug_folder / f"{timestamp}_{safe_name}.xml"
+
+        with open(
+            debug_file,
+            "w",
+            encoding="utf-8-sig"
+        ) as file:
+
+            file.write(xml_text)
+
+        print(
+            "OneNote Debug XML:",
+            debug_file
+        )
+
+    except OSError as error:
+
+        print(
+            "OneNote Debug XML Save Error:",
+            error
+        )
+
+# ------------------------
+# TEMPORARY ONENOTE XML DEBUG END
+# ------------------------
+
 
 # ------------------------
 # COLOR
@@ -1286,6 +1342,20 @@ class FolderSidebar:
         if not xml_text.strip():
 
             raise RuntimeError("OneNoteページの内容が空です")
+
+        # ------------------------
+        # TEMPORARY ONENOTE XML DEBUG START
+        # 調査完了後にこの呼び出し部分を削除する
+        # ------------------------
+
+        save_onenote_debug_xml(
+            xml_text,
+            page_name
+        )
+
+        # ------------------------
+        # TEMPORARY ONENOTE XML DEBUG END
+        # ------------------------
 
         return self.parse_onenote_tables(xml_text, user_name)
 
