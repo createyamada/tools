@@ -1339,11 +1339,45 @@ class FolderSidebar:
 
             headers = [re.sub(r"\s+", "", value) for value in rows[0]]
 
-            try:
-                assignee = headers.index("担当者")
-                task_column = headers.index("タスク名")
-                due_date = headers.index("期限")
-            except ValueError:
+            assignee = next(
+                (
+                    index
+                    for index, value in enumerate(headers)
+                    if value == "担当者" or value.startswith("担当者")
+                ),
+                None
+            )
+
+            task_column = next(
+                (
+                    index
+                    for index, value in enumerate(headers)
+                    if value in ("タスク名", "タスク内容")
+                    or value.startswith("タスク名")
+                    or value.startswith("タスク内容")
+                ),
+                None
+            )
+
+            due_date = next(
+                (
+                    index
+                    for index, value in enumerate(headers)
+                    if value == "期限" or value.startswith("期限")
+                ),
+                None
+            )
+
+            status_column = next(
+                (
+                    index
+                    for index, value in enumerate(headers)
+                    if value == "ステータス" or value.startswith("ステータス")
+                ),
+                None
+            )
+
+            if None in (assignee, task_column, due_date):
                 continue
 
             for row in rows[1:]:
@@ -1354,6 +1388,17 @@ class FolderSidebar:
                     name.strip().casefold()
                     for name in re.split(r"[,、;/\n]", row[assignee])
                 ]
+
+                if status_column is not None and status_column < len(row):
+
+                    status = re.sub(
+                        r"\s+",
+                        "",
+                        row[status_column]
+                    ).casefold()
+
+                    if status == "クローズ":
+                        continue
 
                 if (
                     not user_name.strip()
