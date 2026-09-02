@@ -351,10 +351,47 @@ class FolderSidebar:
 
         control = self.control_area(panel)
 
-        self.update_button(
+        folder_area = tk.Frame(
             control,
-            "↻ フォルダー更新",
-            self.refresh_folder
+            bg=CARD_COLOR
+        )
+
+        folder_area.pack(
+            fill="x",
+            pady=(0, 6)
+        )
+
+        tk.Button(
+            folder_area,
+            text="↻ フォルダー更新",
+            command=self.refresh_folder,
+            bg=BUTTON_BG,
+            fg="white",
+            activebackground=BUTTON_ACTIVE,
+            activeforeground="white",
+            borderwidth=0
+        ).pack(side="left")
+
+        self.target_folder_var = tk.StringVar(
+            value=self.config["target_folder"]
+        )
+
+        target_entry = tk.Entry(
+            folder_area,
+            textvariable=self.target_folder_var,
+            state="readonly",
+            readonlybackground="#374151",
+            fg="white",
+            borderwidth=0,
+            font=("Yu Gothic UI", 9)
+        )
+
+        target_entry.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(6, 0),
+            ipady=4
         )
 
         register = tk.Frame(control, bg=CARD_COLOR)
@@ -526,7 +563,11 @@ class FolderSidebar:
             self.panes.sash_place(1, int(widths[0]) + int(widths[1]) + 5, 0)
         self.initial_sashes_set = True
 
-    def schedule_config_save(self, _event=None):
+    def schedule_config_save(self, event=None):
+
+        if event is not None and event.widget is not self.root:
+            return
+
         if self.save_job:
             self.root.after_cancel(self.save_job)
         self.save_job = self.root.after(400, self.save_layout)
@@ -602,6 +643,26 @@ class FolderSidebar:
         self.load_onenote_tasks()
 
     def refresh_folder(self):
+
+        try:
+
+            with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+
+                saved_config = json.load(file)
+
+            saved_target = saved_config.get("target_folder")
+
+            if isinstance(saved_target, str) and saved_target.strip():
+
+                self.config["target_folder"] = saved_target
+
+        except (OSError, json.JSONDecodeError):
+
+            pass
+
+        self.target_folder_var.set(
+            self.config["target_folder"]
+        )
 
         self.listbox.delete(0, tk.END)
         self.display_to_file = {}
