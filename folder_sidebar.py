@@ -1181,19 +1181,48 @@ class FolderSidebar:
 
             raise ValueError("リンクにpage-idがありません")
 
-        page_id = "{" + match.group(1).strip("{}").upper() + "}"
-        page_id = page_id.replace("'", "''")
+        page_id = match.group(1)
+
+        section_match = re.match(
+            r"^onenote:/*(.*?\.one)(?:#|$)",
+            decoded_link,
+            re.I
+        )
+
+        section_path = ""
+
+        if section_match:
+
+            section_path = section_match.group(1)
+
+            if section_path.startswith("\\"):
+
+                section_path = "\\\\" + section_path.lstrip("\\")
+
+        page_id_data = base64.b64encode(
+            page_id.encode("utf-8")
+        ).decode("ascii")
+
+        section_path_data = base64.b64encode(
+            section_path.encode("utf-8")
+        ).decode("ascii")
 
         script = (
             "$ErrorActionPreference='Stop'; "
-            "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); "
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+            f"$pageId=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{page_id_data}')); "
+            f"$sectionPath=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{section_path_data}')); "
             "$oneNote=New-Object -ComObject OneNote.Application; "
+            "if($sectionPath){ "
+            "$sectionId=''; "
+            "$oneNote.OpenHierarchy($sectionPath,'',[ref]$sectionId,0); "
+            "}; "
             "$xml=''; "
-            f"$oneNote.GetPageContent('{page_id}',[ref]$xml); "
+            "$oneNote.GetPageContent($pageId,[ref]$xml,0); "
             "[Console]::Write($xml)"
         )
 
-        xml_text = subprocess.check_output(
+        result = subprocess.run(
             [
                 "powershell",
                 "-NoProfile",
@@ -1202,11 +1231,32 @@ class FolderSidebar:
                 "-Command",
                 script,
             ],
+            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=30,
         )
+
+        if result.returncode != 0:
+
+            error_text = result.stderr.strip()
+
+            if not error_text:
+
+                error_text = result.stdout.strip()
+
+            if not error_text:
+
+                error_text = "OneNoteからページを取得できませんでした"
+
+            raise RuntimeError(error_text)
+
+        xml_text = result.stdout
+
+        if not xml_text.strip():
+
+            raise RuntimeError("OneNoteページの内容が空です")
 
         return self.parse_onenote_tables(xml_text, user_name)
 
